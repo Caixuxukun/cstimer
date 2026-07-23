@@ -90,6 +90,9 @@ window.twistyjs = (function() {
 		var touchCube;
 		var cameraTheta = 0;
 		var cameraPhi = 6;
+		var orientationBasis = null;
+		var orientationTarget = new THREE.Quaternion();
+		var pendingOrientationLoop = null;
 
 		/*
 		 * Initialization Methods
@@ -118,6 +121,9 @@ window.twistyjs = (function() {
 			// Since we're about to destroy our twistyCanvas, that animation request
 			// will never fire. Thus, we must explicitly stop animating here.
 			stopAnimation();
+			stopOrientationAnimation();
+			orientationBasis = null;
+			orientationTarget.set(0, 0, 0, 1);
 
 			$(twistyContainer).empty();
 			//		log("Canvas Size: " + $(twistyContainer).width() + " x " + $(twistyContainer).height());
@@ -173,6 +179,32 @@ window.twistyjs = (function() {
 			// resize creates the camera and calls render()
 			that.resize();
 		}
+
+		this.setOrientation = function(quaternion) {
+			if (!twisty || !twisty._3d) {
+				return;
+			}
+			if (!quaternion) {
+				stopOrientationAnimation();
+				orientationBasis = null;
+				orientationTarget.set(0, 0, 0, 1);
+				twisty._3d.useQuaternion = false;
+				twisty._3d.quaternion.set(0, 0, 0, 1);
+				render();
+				return;
+			}
+			var q = new THREE.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+			if (!isFinite(q.x) || !isFinite(q.y) || !isFinite(q.z) || !isFinite(q.w) || q.length() < 0.5) {
+				return;
+			}
+			q.normalize();
+			if (orientationBasis === null) {
+				orientationBasis = new THREE.Quaternion().copy(q).inverse();
+			}
+			orientationTarget.multiply(orientationBasis, q).normalize();
+			twisty._3d.useQuaternion = true;
+			startOrientationAnimation();
+		};
 
 		this.resize = function() {
 			// This function should be called after setting twistyContainer
@@ -401,6 +433,46 @@ window.twistyjs = (function() {
 
 		function render() {
 			renderer.render(scene, camera);
+		}
+
+		function stopOrientationAnimation() {
+			if (pendingOrientationLoop !== null) {
+				cancelRequestAnimFrame(pendingOrientationLoop);
+				pendingOrientationLoop = null;
+			}
+		}
+
+		function startOrientationAnimation() {
+			if (pendingOrientationLoop === null) {
+				pendingOrientationLoop = requestAnimFrame(animateOrientation, twistyCanvas);
+			}
+		}
+
+		function animateOrientation() {
+			if (!twisty || !twisty._3d || !twisty._3d.useQuaternion) {
+				pendingOrientationLoop = null;
+				return;
+			}
+			var current = twisty._3d.quaternion;
+			var dot = current.x * orientationTarget.x +
+				current.y * orientationTarget.y +
+				current.z * orientationTarget.z +
+				current.w * orientationTarget.w;
+			var direction = dot < 0 ? -1 : 1;
+			var amount = 0.25;
+			current.set(
+				current.x * (1 - amount) + orientationTarget.x * amount * direction,
+				current.y * (1 - amount) + orientationTarget.y * amount * direction,
+				current.z * (1 - amount) + orientationTarget.z * amount * direction,
+				current.w * (1 - amount) + orientationTarget.w * amount * direction
+			).normalize();
+			render();
+			if (Math.abs(dot) > 0.99999) {
+				current.copy(orientationTarget);
+				pendingOrientationLoop = null;
+			} else {
+				pendingOrientationLoop = requestAnimFrame(animateOrientation, twistyCanvas);
+			}
 		}
 
 		function moveCameraDelta(deltaTheta, deltaPhi) {

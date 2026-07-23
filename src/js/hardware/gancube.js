@@ -549,6 +549,25 @@ execMain(function() {
 
 	var keyCheck = 0;
 
+	function emitGyro(quaternion, velocity) {
+		var norm = Math.sqrt(
+			quaternion.w * quaternion.w +
+				quaternion.x * quaternion.x +
+				quaternion.y * quaternion.y +
+				quaternion.z * quaternion.z
+		);
+		if (!isFinite(norm) || norm < 0.5) {
+			return;
+		}
+		// GAN uses +X=R, +Y=B, +Z=U. Twisty uses +X=R, +Y=U, +Z=F.
+		GiikerCube.orientationCallback({
+			x: quaternion.x / norm,
+			y: quaternion.z / norm,
+			z: -quaternion.y / norm,
+			w: quaternion.w / norm
+		}, velocity);
+	}
+
 	function onStateChangedV2(event) {
 		var value = event.target.value;
 		if (decoder == null) {
@@ -566,6 +585,18 @@ execMain(function() {
 		value = value.join('');
 		var mode = parseInt(value.slice(0, 4), 2);
 		if (mode == 1) { // gyro
+			var quaternion = {
+				w: parseSignMagnitude16(value, 4),
+				x: parseSignMagnitude16(value, 20),
+				y: parseSignMagnitude16(value, 36),
+				z: parseSignMagnitude16(value, 52)
+			};
+			var velocity = {
+				x: parseSignMagnitude4(value, 68),
+				y: parseSignMagnitude4(value, 72),
+				z: parseSignMagnitude4(value, 76)
+			};
+			emitGyro(quaternion, velocity);
 		} else if (mode == 2) { // cube move
 			giikerutil.log('[gancube]', 'v2 received move event', value);
 			moveCnt = parseInt(value.slice(4, 12), 2);
@@ -1033,6 +1064,7 @@ execMain(function() {
 				'v=' + JSON.stringify(velocity),
 				'norm=' + norm.toFixed(5)
 			);
+			emitGyro(quaternion, velocity);
 		} else {
 			giikerutil.log('[gancube]', 'v4 received unknown event', mode, value);
 		}

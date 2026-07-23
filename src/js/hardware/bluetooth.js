@@ -148,11 +148,13 @@ function BtDeviceGroupFactory() {
 			_device.removeEventListener('gattserverdisconnected', onDisconnect);
 			_device.gatt.disconnect();
 			_device = null;
+			orientationCallback(null);
 		});
 	}
 
 	var callback = $.noop;
 	var evtCallback = $.noop;
+	var orientationCallback = $.noop;
 
 	return {
 		init: init,
@@ -166,6 +168,9 @@ function BtDeviceGroupFactory() {
 		setEventCallback: function(func) {
 			evtCallback = func;
 		},
+		setOrientationCallback: function(func) {
+			orientationCallback = func;
+		},
 		getCube: function() {
 			return cube || (DEBUGBL && {
 				getBatteryLevel: function() { return Promise.resolve(80); }
@@ -177,6 +182,9 @@ function BtDeviceGroupFactory() {
 		onDisconnect: onDisconnect,
 		callback: function() {
 			return callback.apply(null, arguments);
+		},
+		orientationCallback: function() {
+			return orientationCallback.apply(null, arguments);
 		}
 	};
 }

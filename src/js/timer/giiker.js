@@ -106,10 +106,15 @@ execMain(function(timer) {
 			puzzleObj.applyMoves(puzzleObj.parseScramble(todoMoves.join(' ')));
 		}
 
+		function setOrientation(quaternion) {
+			puzzleObj && puzzleObj.setOrientation(quaternion);
+		}
+
 		return {
 			resetVRC: resetVRC, //reset to solved
 			setState: setState,
 			setOri: setOri,
+			setOrientation: setOrientation,
 			setSize: setSize
 		}
 	})();
@@ -215,6 +220,12 @@ execMain(function(timer) {
 		}
 	}
 
+	function orientationCallback(quaternion) {
+		if (enableVRC) {
+			giikerVRC.setOrientation(quaternion);
+		}
+	}
+
 	function canStart(facelet) {
 		return facelet != mathlib.SOLVED_FACELET || kernel.getProp('giiMode') != 'n';
 	}
@@ -300,6 +311,9 @@ execMain(function(timer) {
 	timer.giiker = {
 		setEnable: function(input) { //s: stackmat, m: moyu
 			enable = input == 'g';
+			if (enable) {
+				GiikerCube.setOrientationCallback(orientationCallback);
+			}
 			if (enable && !GiikerCube.isConnected()) {
 				startConnect();
 			} else if (!enable) {

@@ -62,6 +62,12 @@ var puzzleFactory = execMain(function() {
 		return this.twisty.parseScramble(scramble, addPreScr);
 	};
 
+	Puzzle.prototype.setOrientation = function(quaternion) {
+		if (this.twistyScene.setOrientation) {
+			this.twistyScene.setOrientation(quaternion);
+		}
+	};
+
 	var toInitCalls = null;
 
 	var prevParents = [];
