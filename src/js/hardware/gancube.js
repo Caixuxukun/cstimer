@@ -865,6 +865,23 @@ execMain(function() {
 		parseV4Data(value);
 	}
 
+	function bitsToHex(bits) {
+		var bytes = [];
+		for (var i = 0; i + 7 < bits.length; i += 8) {
+			bytes.push((parseInt(bits.slice(i, i + 8), 2) + 0x100).toString(16).slice(-2));
+		}
+		return bytes.join(' ').toUpperCase();
+	}
+	function parseSignMagnitude16(bits, offset) {
+		var raw = parseInt(bits.slice(offset, offset + 16), 2);
+		var sign = (raw & 0x8000) ? -1 : 1;
+		return sign * (raw & 0x7fff) / 0x7fff;
+	}
+	function parseSignMagnitude4(bits, offset) {
+		var raw = parseInt(bits.slice(offset, offset + 4), 2);
+		var sign = (raw & 0x8) ? -1 : 1;
+		return sign * (raw & 0x7);
+	}
 	function parseV4Data(value) {
 		var locTime = $.now();
 		value = decode(value);
@@ -874,6 +891,13 @@ execMain(function() {
 		value = value.join('');
 		var mode = parseInt(value.slice(0, 8), 2);
 		var len = parseInt(value.slice(8, 16), 2);
+		giikerutil.log(
+			'[gancube]',
+			'v4 raw packet',
+			'mode=0x' + ('0' + mode.toString(16)).slice(-2),
+			'len=' + len,
+			bitsToHex(value)
+		);
 		if (mode == 0x01) { // cube move
 			prevMoveLocTime = locTime;
 			moveCnt = parseInt(value.slice(56, 64) + value.slice(48, 56), 2);
@@ -981,6 +1005,34 @@ execMain(function() {
 			giikerutil.log('[gancube]', 'v4 battery level', batteryLevel);
 			giikerutil.updateBattery([batteryLevel, deviceName + '*']);
 		} else if (mode == 0xEC) { // gyro
+			if (value.length < 92) {
+				giikerutil.log('[gancube]', 'v4 gyro packet is too short', value.length, value);
+				return;
+			}
+			var quaternion = {
+				w: parseSignMagnitude16(value, 16),
+				x: parseSignMagnitude16(value, 32),
+				y: parseSignMagnitude16(value, 48),
+				z: parseSignMagnitude16(value, 64)
+			};
+			var velocity = {
+				x: parseSignMagnitude4(value, 80),
+				y: parseSignMagnitude4(value, 84),
+				z: parseSignMagnitude4(value, 88)
+			};
+			var norm = Math.sqrt(
+				quaternion.w * quaternion.w +
+				quaternion.x * quaternion.x +
+				quaternion.y * quaternion.y +
+				quaternion.z * quaternion.z
+			);
+			giikerutil.log(
+				'[gancube]',
+				'v4 gyro',
+				'q=' + JSON.stringify(quaternion),
+				'v=' + JSON.stringify(velocity),
+				'norm=' + norm.toFixed(5)
+			);
 		} else {
 			giikerutil.log('[gancube]', 'v4 received unknown event', mode, value);
 		}
